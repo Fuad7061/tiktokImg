@@ -70,18 +70,16 @@ export function findJobByIdempotency(key, apiKeyId = null) {
     .get(String(key), String(apiKeyId || '')));
 }
 
-export function createJob({ kind, source, apiKeyId = null, model, prompt, ratio = '', size = '', count = 1, references = [], request = {}, idempotencyKey = null }) {
+export function createJob({ kind, source, apiKeyId = null, model, prompt, count = 1, references = [], request = {}, idempotencyKey = null }) {
   const resolved = resolveModel(model || config.defaultModel);
   const normalizedRefs = normalizeReferences(references);
   const jobId = uid('job');
   const at = nowIso();
-  const dims = kind === 't2i' ? resolveDimensions({ ratio, size }) : null;
+  const dims = kind === 't2i' ? resolveDimensions({ ratio: '9:16' }) : null;
   const refsJson = JSON.stringify({ inputs: normalizedRefs, remoteUrls: [], canvasUrl: null });
   const requestJson = JSON.stringify({
     prompt,
     model: resolved.id,
-    ratio: dims?.ratio || ratio || 'auto',
-    size: dims?.label || size || '',
     count,
     references: normalizedRefs
   });
@@ -93,8 +91,8 @@ export function createJob({ kind, source, apiKeyId = null, model, prompt, ratio 
     apiKeyId,
     resolved.id,
     prompt,
-    dims?.ratio || ratio || 'auto',
-    dims?.label || size || '',
+    dims?.ratio || 'auto',
+    dims?.label || '',
     count,
     'queued',
     'queued',
@@ -168,7 +166,7 @@ export async function executeJob(jobId) {
     const request = jsonParse(row.request_json, {});
     const model = modelOrDefault(request.model || row.model);
     const count = Math.max(1, Math.min(model.maxOutputs, Number(request.count || row.requested || 1)));
-    const dims = row.kind === 't2i' ? resolveDimensions({ ratio: request.ratio, size: request.size }) : null;
+    const dims = row.kind === 't2i' ? resolveDimensions({ ratio: '9:16' }) : null;
     const references = request.references || [];
     const buffers = row.kind === 'i2i' && references.length ? await prepareReferences(references) : [];
     jobBuffers.set(jobId, buffers);
@@ -249,8 +247,8 @@ export async function executeJob(jobId) {
             height: image.height || generated.images[0]?.height || null
           })),
           model: model.id,
-          ratio: dims?.ratio || request.ratio || 'auto',
-          size: dims?.label || request.size || '',
+          ratio: dims?.ratio || 'auto',
+          size: dims?.label || '',
           partial: generated.partial,
           taskId: submitted.taskId
         };

@@ -151,10 +151,6 @@
                   <span>Model</span>
                   <select id="pg-model"></select>
                 </label>
-                <label class="field">
-                  <span>Aspect ratio</span>
-                  <select id="pg-ratio"></select>
-                </label>
                 <label class="field narrow">
                   <span>Images</span>
                   <select id="pg-count"></select>
@@ -163,7 +159,7 @@
               <label class="field">
                 <span>Reference images (optional, up to 4)</span>
                 <input id="pg-refs" type="file" accept="image/*" multiple />
-                <small class="muted">When references are present the request runs as image-to-image and the output follows the reference aspect ratio.</small>
+                <small class="muted">Text-to-image always produces 9:16 (864×1536) — TikTok only generates 9:16 by default. When references are present the request runs as image-to-image and the output follows the reference aspect ratio.</small>
               </label>
               <div id="pg-ref-preview" class="thumb-row"></div>
               <button class="btn primary" type="submit">Generate</button>
@@ -227,6 +223,7 @@
             <h3>Edit or remix an image</h3>
             <pre id="curl-edits" class="code"></pre>
             <h3>Async job (recommended for automation)</h3>
+            <p class="muted small">Each example generates a fresh <code>ID</code> automatically. Parallel runs never collide; re-use the same <code>$ID</code> to retry the exact same job.</p>
             <pre id="curl-async" class="code"></pre>
             <pre id="curl-poll" class="code"></pre>
             <div class="divider"></div>
@@ -235,15 +232,14 @@
               <table class="table docs-table">
                 <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
                 <tbody>
-                  <tr><td><code>model</code></td><td>string</td><td id="doc-default-model">nano-banana-pro</td><td><code>nano-banana-pro</code> / <code>gemini</code>, or <code>genai_seedream4.5</code>.</td></tr>
+                  <tr><td colspan="4"><strong>Note:</strong> TikTok only generates 9:16 (864×1536) images by default — there is no aspect-ratio parameter. Image-to-image output follows the reference aspect ratio.</td></tr>
+                  <tr><td><code>model</code></td><td>string</td><td id="doc-default-model">nano-banana-pro</td><td><code>nano-banana-pro</code> or <code>seedream4.5</code>.</td></tr>
                   <tr><td><code>prompt</code></td><td>string</td><td>required</td><td>The image description.</td></tr>
-                  <tr><td><code>ratio</code></td><td>string</td><td>1:1</td><td><code>1:1</code>, <code>9:16</code>, <code>16:9</code>, <code>4:3</code>, <code>3:4</code>, <code>3:2</code>, <code>2:3</code>, <code>21:9</code>, <code>5:4</code>, <code>4:5</code>, or <code>WxH</code>.</td></tr>
-                  <tr><td><code>size</code></td><td>string</td><td>—</td><td>Alias for a custom size such as <code>1024x1024</code>.</td></tr>
                   <tr><td><code>n</code></td><td>number</td><td>1</td><td>1–4 images per request.</td></tr>
                   <tr><td><code>response_format</code></td><td>string</td><td><code>url</code></td><td><code>url</code> or <code>b64_json</code>. Aliases: <code>base64</code>, <code>base_64</code>, <code>output_format</code>, <code>output</code>.</td></tr>
                   <tr><td><code>images</code></td><td>string[]</td><td>—</td><td>Up to 4 reference images: HTTPS URL or data URL. Presence switches to image-to-image.</td></tr>
                   <tr><td><code>Prefer: respond-async</code></td><td>header</td><td>—</td><td>Returns <code>202</code> with <code>x-job-id</code> immediately; poll the job endpoint.</td></tr>
-                  <tr><td><code>Idempotency-Key</code></td><td>header</td><td>—</td><td>Replays the same job instead of billing again.</td></tr>
+                  <tr><td><code>Idempotency-Key</code></td><td>header</td><td>auto</td><td>Auto-generated unique ID per request (examples use <code>uuidgen</code>). Parallel requests each get their own ID. Retry with the same ID → same job, no double charge.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -269,10 +265,6 @@
                 <label class="field grow">
                   <span>Default model</span>
                   <select id="set-model"></select>
-                </label>
-                <label class="field grow">
-                  <span>Default ratio</span>
-                  <select id="set-ratio"></select>
                 </label>
               </div>
               <div class="row">

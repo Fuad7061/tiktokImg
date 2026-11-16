@@ -50,7 +50,6 @@ export const config = Object.freeze({
   autoSyncMinutes: number('AUTO_SYNC_MINUTES', 15, 0, 1440),
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, ''),
   defaultModel: process.env.DEFAULT_MODEL || 'nano-banana-pro',
-  defaultRatio: process.env.DEFAULT_RATIO || '1:1',
   accountConcurrency: number('ACCOUNT_CONCURRENCY', 1, 1, 5),
   maxAttempts: number('MAX_ATTEMPTS', 3, 1, 5),
   jobTimeoutMs: number('JOB_TIMEOUT_MS', 300000, 30000, 900000),

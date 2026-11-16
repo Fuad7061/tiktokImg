@@ -7,14 +7,13 @@ import { deleteProfile, importProfile, listAccounts, listProfiles, refreshCredit
 import { clearJobs, createJob, deleteJob, executeJob, findJobByIdempotency, getJob, listJobs, retryJob, waitForJob } from './jobs.js';
 import { authenticate, checkRateLimit, createKey, deleteKey, listKeys, revokeKey } from './keys.js';
 import { listModels, modelInfo, resolveModel } from './provider/models.js';
-import { resolveDimensions } from './provider/png.js';
 import { clearSession, checkPassword, authRequired, isAdmin, issueSession, setAdminPassword } from './session.js';
 import { sessionSecret } from './vault.js';
 import { automationState, runAutomationNow } from './scheduler.js';
 
 const VERSION = '1.0.0';
 
-const SETTING_KEYS = ['defaultModel', 'defaultRatio', 'accountConcurrency', 'maxAttempts', 'jobTimeoutMs', 'retentionDays', 'rateLimitRpm', 'autoSyncMinutes'];
+const SETTING_KEYS = ['defaultModel', 'accountConcurrency', 'maxAttempts', 'jobTimeoutMs', 'retentionDays', 'rateLimitRpm', 'autoSyncMinutes'];
 
 function send(res, status, body, headers = {}) {
   const payload = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body ?? null));
@@ -151,16 +150,12 @@ function generationParams(body, { edits = false } = {}) {
   const model = resolveModel(body?.model || config.defaultModel);
   const prompt = String(body?.prompt || body?.description || '').trim();
   const count = collectionParams(body?.n ?? body?.num ?? body?.count ?? 1);
-  const ratio = String(body?.aspect_ratio || body?.ratio || '').trim();
-  const size = String(body?.size || '').trim();
   const references = referencesFrom(body);
   return {
     kind: edits || references.length ? 'i2i' : 't2i',
     model,
     prompt,
     count,
-    ratio,
-    size,
     references,
     responseFormat: normalizeResponseFormat(body?.response_format || body?.responseFormat || body?.output_format || body?.outputFormat || body?.output),
     quality: String(body?.quality || ''),
@@ -181,11 +176,9 @@ async function createAndRun(req, params, { source, apiKeyId, idempotencyKey, bac
     apiKeyId,
     model: params.model.id,
     prompt: params.prompt,
-    ratio: params.ratio,
-    size: params.size,
     count: params.count,
     references: params.references,
-    request: { prompt: params.prompt, model: params.model.id, ratio: params.ratio, size: params.size, count: params.count, references: params.references },
+    request: { prompt: params.prompt, model: params.model.id, count: params.count, references: params.references },
     idempotencyKey
   });
   if (background || params.background) {
@@ -229,7 +222,7 @@ async function handleGeneration(req, res, url, { edits = false } = {}) {
 
   const prefer = String(req.headers.prefer || '').toLowerCase();
   const background = prefer.includes('respond-async');
-  const idempotencyKey = String(req.headers['idempotency-key'] || '').slice(0, 200) || null;
+  const idempotencyKey = String(req.headers['idempotency-key'] || body.idempotencyKey || body.idempotency_key || '').slice(0, 200) || null;
 
   try {
     const { job, replay } = await createAndRun(req, params, {
@@ -319,7 +312,6 @@ export function currentSettings() {
   const stored = getSettings(SETTING_KEYS);
   return {
     defaultModel: stored.defaultModel || config.defaultModel,
-    defaultRatio: stored.defaultRatio || config.defaultRatio,
     accountConcurrency: Number(stored.accountConcurrency || config.accountConcurrency),
     maxAttempts: Number(stored.maxAttempts || config.maxAttempts),
     jobTimeoutMs: Number(stored.jobTimeoutMs || config.jobTimeoutMs),
@@ -334,10 +326,6 @@ function validateSettings(body) {
   if (body.defaultModel !== undefined) {
     const model = resolveModel(body.defaultModel);
     output.defaultModel = model.id;
-  }
-  if (body.defaultRatio !== undefined) {
-    const dims = resolveDimensions({ ratio: body.defaultRatio });
-    output.defaultRatio = dims.ratio;
   }
   const numeric = {
     accountConcurrency: [1, 5],
@@ -554,27 +542,30 @@ export async function handleApi(req, res, url) {
       const model = resolveModel(payload.model || currentSettings().defaultModel);
       const prompt = String(payload.prompt || '').trim();
       if (!prompt) return fail(res, 422, 'A prompt is required.', 'invalid_prompt');
+      const idempotencyKey = String(payload.idempotencyKey || payload.idempotency_key || req.headers['idempotency-key'] || '').slice(0, 200) || null;
+      if (idempotencyKey) {
+        const existing = findJobByIdempotency(idempotencyKey, null);
+        if (existing) return send(res, 200, { ok: true, job: existing, replay: true });
+      }
       const kind = references.length ? 'i2i' : 't2i';
+      const count = collectionParams(payload.count ?? payload.n ?? 1);
       const job = createJob({
         kind,
         source: 'playground',
         model: model.id,
         prompt,
-        ratio: String(payload.ratio || ''),
-        size: String(payload.size || ''),
-        count: collectionParams(payload.count ?? payload.n ?? 1),
+        count,
         references,
+        idempotencyKey,
         request: {
           prompt,
           model: model.id,
-          ratio: String(payload.ratio || ''),
-          size: String(payload.size || ''),
-          count: collectionParams(payload.count ?? payload.n ?? 1),
+          count,
           references
         }
       });
       setImmediate(() => executeJob(job.id).catch(() => {}));
-      return send(res, 202, { ok: true, job });
+      return send(res, 202, { ok: true, job, replay: false });
     } catch (error) {
       return fail(res, error.statusCode || 400, error.message, error.code || 'generate_failed');
     }

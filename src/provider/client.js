@@ -36,8 +36,9 @@ function checkHeaders(cookieHeader, csrf) {
 export async function submitGeneration({ profileId, accountId, prompt, model, num, imageUrls }) {
   const { cookieHeader } = profileCookieHeader(profileId, accountId);
   const csrf = csrfFromCookieHeader(cookieHeader);
+  const providerModel = model.providerModel || model.id;
   const settings = {
-    aiModel: model.id,
+    aiModel: providerModel,
     prompt,
     images: imageUrls.map((url, index) => ({
       fileType: 'image',
@@ -50,7 +51,7 @@ export async function submitGeneration({ profileId, accountId, prompt, model, nu
     })),
     num
   };
-  const body = JSON.stringify({ images: imageUrls, prompt, model: model.id, num, settings: JSON.stringify(settings) });
+  const body = JSON.stringify({ images: imageUrls, prompt, model: providerModel, num, settings: JSON.stringify(settings) });
   const response = await httpRequest(`${BASE}/creative_bff_i18n/api/cue/i2v/gen_i2i_image?${QUERY}`, {
     method: 'POST',
     headers: submitHeaders(cookieHeader, csrf),

@@ -3,7 +3,7 @@
 A small, dependency-free image generation service with a web dashboard and an OpenAI-compatible API. It drives the TikTok Creative Studio image endpoints through a pool of imported browser sessions, so requests keep working when an individual account fails or runs out of credits.
 
 - Node 24, built-in `node:http` and `node:sqlite` — no npm dependencies
-- Text-to-image and image-to-image (`gemini` / Nano Banana Pro, `genai_seedream4.5` / Seedream 4.5)
+- Text-to-image and image-to-image (`nano-banana-pro`, `seedream4.5`)
 - Account pool with per-account concurrency, failover, and reference reuse between attempts
 - Dashboard for cookie profiles, session expiry (when the export includes it), credits, jobs, playground, and API keys
 - Images are streamed through signed links; nothing is written to disk except metadata
@@ -68,7 +68,6 @@ All variables are optional except where noted.
 | `COOKIE_PROFILE_NAME` | `Main account` | Profile name used for the auto-imported cookie file |
 | `PUBLIC_BASE_URL` | request origin | Absolute base URL used in media links |
 | `DEFAULT_MODEL` | `nano-banana-pro` | Default model |
-| `DEFAULT_RATIO` | `1:1` | Default aspect ratio |
 | `ACCOUNT_CONCURRENCY` | `1` | Parallel jobs per account (1–5) |
 | `MAX_ATTEMPTS` | `3` | Attempts per job including failover (1–5) |
 | `JOB_TIMEOUT_MS` | `300000` | Polling deadline (30s–15min) |
@@ -100,13 +99,12 @@ curl -s https://images.example.com/v1/images/generations \
   -d '{
     "model": "nano-banana-pro",
     "prompt": "A ceramic mug on a linen tablecloth, soft morning light",
-    "ratio": "1:1",
     "n": 1,
     "response_format": "url"
   }'
 ```
 
-`n` defaults to 1 and is clamped to 1–4. `ratio` accepts `1:1`, `9:16`, `16:9`, `4:3`, `3:4`, `3:2`, `2:3`, `21:9`, `5:4`, `4:5`. A custom `size` such as `864x1536` is also accepted for text-to-image.
+`n` defaults to 1 and is clamped to 1–4. TikTok only generates 9:16 (864×1536) images by default — there is no aspect-ratio parameter.
 
 ### Image to image
 
@@ -117,7 +115,7 @@ curl -s https://images.example.com/v1/images/edits \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "genai_seedream4.5",
+    "model": "seedream4.5",
     "prompt": "Repaint this scene as a soft watercolor",
     "images": ["data:image/png;base64,..."]
   }'
@@ -128,29 +126,33 @@ Multipart uploads are supported for OpenAI SDK compatibility:
 ```bash
 curl -s https://images.example.com/v1/images/edits \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY" \
-  -F model=genai_seedream4.5 \
+  -F model=seedream4.5 \
   -F prompt="Repaint this scene as a soft watercolor" \
   -F image=@photo.png
 ```
 
-Up to 4 references, 20 MB each, 25 MB per remote download. Image-to-image output follows the reference aspect ratio; a `size`/`ratio` on an edit request does not change it. Public remote URLs are accepted with SSRF protection.
+Up to 4 references, 20 MB each, 25 MB per remote download. Image-to-image output follows the reference aspect ratio. Public remote URLs are accepted with SSRF protection.
 
 ### Asynchronous jobs
 
-Add `Prefer: respond-async` to receive `202` with a job id, then poll:
+Add `Prefer: respond-async` to receive `202` with a job id, then poll. The examples auto-generate a unique `Idempotency-Key` so parallel runs never collide; re-use the same `$ID` to retry the same job:
 
 ```bash
+ID="$(uuidgen 2>/dev/null || openssl rand -hex 16)"
 curl -s https://images.example.com/v1/images/generations \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY" \
   -H "Content-Type: application/json" \
   -H "Prefer: respond-async" \
-  -d '{"model":"gemini","prompt":"A lighthouse at dusk","ratio":"16:9"}'
+  -H "Idempotency-Key: $ID" \
+  -d '{"model":"nano-banana-pro","prompt":"A lighthouse at dusk"}'
 
 curl -s https://images.example.com/api/jobs/JOB_ID \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY"
 ```
 
-The polling endpoint accepts the same `Authorization: Bearer` key that created the job (a dashboard session also works). `Idempotency-Key` is supported so retries return the existing job instead of billing twice.
+- **Parallel:** each shell run (or each background `&` job) creates a fresh `$ID` — requests never share a key.
+- **Retry:** run again with the **same** `$ID` → you get the existing job back, not a new one (no double charge).
+- You can also put `idempotencyKey` in the JSON body instead of the header.
 
 ### Responses
 
@@ -162,12 +164,12 @@ Synchronous success:
   "data": [
     { "url": "https://images.example.com/api/media/job_.../0?t=...", "revised_prompt": "..." }
   ],
-  "model": "gemini",
-  "output": { "ratio": "16:9", "size": "1536x864", "partial": false }
+  "model": "nano-banana-pro",
+  "output": { "ratio": "9:16", "size": "864x1536", "partial": false }
 }
 ```
 
-`response_format` accepts `url` (default) or `b64_json`; the aliases `base64`, `base_64`, `output_format`, and `output` also work. Signed media links expire after 7 days and do not require the API key, even though the upstream provider URL may expire sooner. `output.size` reports the requested canvas; the provider may return a slightly scaled image, so trust the real dimensions of the downloaded file.
+`response_format` accepts `url` (default) or `b64_json`; the aliases `base64`, `base_64`, `output_format`, and `output` also work. Signed media links expire after 7 days and do not require the API key, even though the upstream provider URL may expire sooner. Text-to-image always uses a 9:16 (864×1536) canvas because TikTok only generates 9:16 by default; image-to-image follows the reference ratio. Trust the real dimensions of the downloaded file.
 
 Errors use the OpenAI shape:
 

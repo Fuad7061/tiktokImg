@@ -1,18 +1,26 @@
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
 
-const RATIOS = [
-  ['1:1', '1024 × 1024'],
-  ['9:16', '864 × 1536'],
-  ['16:9', '1536 × 864'],
-  ['4:3', '1152 × 864'],
-  ['3:4', '864 × 1152'],
-  ['3:2', '1296 × 864'],
-  ['2:3', '864 × 1296'],
-  ['21:9', '1680 × 720'],
-  ['5:4', '1080 × 864'],
-  ['4:5', '864 × 1080']
-];
+const PG_PREFS_KEY = 'image-studio.playground';
+
+function savePlaygroundPrefs() {
+  try {
+    localStorage.setItem(PG_PREFS_KEY, JSON.stringify({
+      model: $('#pg-model').value,
+      count: $('#pg-count').value
+    }));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPlaygroundPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(PG_PREFS_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
 
 const VIEWS = {
   overview: { title: 'Overview', subtitle: 'Account pool and generation activity' },
@@ -123,18 +131,31 @@ function elapsedSeconds(job) {
   return Math.max(0, Math.round((Date.now() - start) / 1000));
 }
 
-function modelName(id) {
-  const model = state.models.find(item => item.id === id);
-  return model?.name ? `${model.name}` : String(id || '—');
-}
+const MODEL_ALIASES = {
+  gemini: 'nano-banana-pro',
+  'nano-banana': 'nano-banana-pro',
+  nano_banana_pro: 'nano-banana-pro',
+  'gemini-pro': 'nano-banana-pro',
+  'genai_seedream4.5': 'seedream4.5',
+  'seedream-4.5': 'seedream4.5',
+  seedream: 'seedream4.5',
+  'seedream-4': 'seedream4.5'
+};
 
 function canonicalModelId(value) {
   const wanted = String(value || '').toLowerCase();
   if (!wanted) return value;
-  const model = state.models.find(item => item.id === value
-    || item.id.toLowerCase() === wanted
-    || (item.aliases || []).some(alias => String(alias).toLowerCase() === wanted));
-  return model?.id || value;
+  const mapped = MODEL_ALIASES[wanted] || wanted;
+  const model = state.models.find(item => item.id === mapped
+    || item.id.toLowerCase() === mapped
+    || item.id.toLowerCase() === wanted);
+  return model?.id || mapped || value;
+}
+
+function modelName(id) {
+  const key = canonicalModelId(id);
+  const model = state.models.find(item => item.id === key);
+  return model?.name ? model.name : String(id || '—');
 }
 
 function statusClass(status) {
@@ -253,6 +274,8 @@ function wire() {
   $('#sync-all-button').addEventListener('click', handleSyncAll);
 
   $('#pg-refs').addEventListener('change', handleRefFiles);
+  $('#pg-model').addEventListener('change', savePlaygroundPrefs);
+  $('#pg-count').addEventListener('change', savePlaygroundPrefs);
   $('#pg-ref-preview').addEventListener('click', event => {
     const button = event.target.closest('button[data-remove]');
     if (!button) return;
@@ -402,7 +425,7 @@ async function loadOverview() {
   $('#overview-curl').textContent = `curl -s ${location.origin}/v1/images/generations \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"nano-banana-pro","prompt":"A serene mountain lake at sunrise","ratio":"16:9"}'`;
+  -d '{"model":"nano-banana-pro","prompt":"A serene mountain lake at sunrise"}'`;
 }
 
 /* ---------- accounts ---------- */
@@ -672,9 +695,6 @@ async function loadModels() {
   const modelOptions = state.models.map(model => `<option value="${esc(model.id)}">${esc(model.name)} (${esc(model.id)})</option>`).join('');
   $('#pg-model').innerHTML = modelOptions;
   $('#set-model').innerHTML = modelOptions;
-  const ratioOptions = RATIOS.map(([value, label]) => `<option value="${esc(value)}">${esc(value)} · ${esc(label)}</option>`).join('');
-  $('#pg-ratio').innerHTML = ratioOptions;
-  $('#set-ratio').innerHTML = ratioOptions;
   $('#pg-count').innerHTML = [1, 2, 3, 4].map(value => `<option value="${value}"${value === 1 ? ' selected' : ''}>${value}</option>`).join('');
 }
 
@@ -682,8 +702,10 @@ async function loadPlayground() {
   const settingsData = await apiFetch('/api/settings');
   state.settings = settingsData.settings || state.settings;
   if (!$('#pg-model').options.length) await loadModels();
-  if (state.settings.defaultModel) $('#pg-model').value = canonicalModelId(state.settings.defaultModel);
-  if (state.settings.defaultRatio) $('#pg-ratio').value = state.settings.defaultRatio;
+  const prefs = loadPlaygroundPrefs();
+  if (prefs.model) $('#pg-model').value = canonicalModelId(prefs.model);
+  else if (state.settings.defaultModel) $('#pg-model').value = canonicalModelId(state.settings.defaultModel);
+  if (prefs.count) $('#pg-count').value = prefs.count;
   if (!$('#pg-prompt').value) $('#pg-prompt').value = '';
   await loadPlaygroundHistory();
   if (state.pgJob) renderPlaygroundJob(state.pgJob);
@@ -744,18 +766,22 @@ async function handleGenerate(event) {
   clearTimeout(state.pgPoll);
   try {
     const references = await Promise.all(state.refs.map(item => fileToDataUrl(item.file)));
+    savePlaygroundPrefs();
+    // Fresh key per click → parallel playground jobs never share a key.
+    // Re-submitting the same click (network retry) reuses this key → same job.
+    const idempotencyKey = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const payload = {
       prompt,
       model: $('#pg-model').value,
-      ratio: $('#pg-ratio').value,
       count: Number($('#pg-count').value) || 1,
-      references
+      references,
+      idempotencyKey
     };
     const result = await apiFetch('/api/generate', { method: 'POST', body: payload });
     state.pgJob = result.job;
     renderPlaygroundJob(state.pgJob);
     pollPlaygroundJob(result.job.id);
-    toast('Job started.', 'ok');
+    toast(result.replay ? 'Existing job resumed.' : 'Job started.', 'ok');
   } catch (error) {
     toast(error.message, 'err');
     $('#pg-output').innerHTML = `<p class="form-error">${esc(error.message)}</p>`;
@@ -988,29 +1014,39 @@ async function loadKeys() {
 
   $('#api-base').textContent = location.origin;
   $('#doc-default-model').textContent = state.settings.defaultModel || 'nano-banana-pro';
-  $('#curl-generations').textContent = `curl -s ${location.origin}/v1/images/generations \\
+  // Unique key per shell run — reuse $ID to retry the same job; each parallel line gets its own ID.
+  const idem = `$(uuidgen 2>/dev/null || openssl rand -hex 16)`;
+  $('#curl-generations').textContent = `ID="${idem}"
+curl -s ${location.origin}/v1/images/generations \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: $ID" \\
   -d '{
     "model": "nano-banana-pro",
     "prompt": "A minimal product shot of a ceramic mug",
-    "ratio": "1:1",
     "n": 1
-  }'`;
-  $('#curl-edits').textContent = `curl -s ${location.origin}/v1/images/edits \\
+  }'
+# Retry the same request later with the same "$ID" → same job, no double charge.`;
+  $('#curl-edits').textContent = `ID="${idem}"
+curl -s ${location.origin}/v1/images/edits \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: $ID" \\
   -d '{
-    "model": "genai_seedream4.5",
+    "model": "seedream4.5",
     "prompt": "Turn this into a watercolor painting",
     "images": ["data:image/png;base64,..."]
   }'`;
-  $('#curl-async').textContent = `curl -s ${location.origin}/v1/images/generations \\
+  $('#curl-async').textContent = `ID="${idem}"
+curl -s ${location.origin}/v1/images/generations \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
   -H "Prefer: respond-async" \\
-  -H "Idempotency-Key: my-unique-request-id" \\
-  -d '{"model":"gemini","prompt":"A serene mountain lake at sunrise","ratio":"16:9"}'`;
+  -H "Idempotency-Key: $ID" \\
+  -d '{"model":"nano-banana-pro","prompt":"A serene mountain lake at sunrise"}'
+# Response: 202 + x-job-id. Poll with that job id.
+# Parallel-safe: each shell run generates a fresh $ID, so requests never collide.
+# Retry-safe: re-run with the same $ID → the existing job, not a new one.`;
   $('#curl-poll').textContent = `curl -s ${location.origin}/api/jobs/JOB_ID \\
   -H "Authorization: Bearer sk-..."`;
 }
@@ -1089,8 +1125,7 @@ async function loadSettings() {
     apiFetch('/healthz')
   ]);
   state.settings = settingsData.settings || {};
-  $('#set-model').value = canonicalModelId(state.settings.defaultModel || 'gemini');
-  $('#set-ratio').value = state.settings.defaultRatio || '1:1';
+  $('#set-model').value = canonicalModelId(state.settings.defaultModel || 'nano-banana-pro');
   $('#set-concurrency').value = state.settings.accountConcurrency ?? 1;
   $('#set-attempts').value = state.settings.maxAttempts ?? 3;
   $('#set-timeout').value = state.settings.jobTimeoutMs ?? 300000;
@@ -1133,7 +1168,6 @@ async function handleSettingsSave(event) {
       method: 'PATCH',
       body: {
         defaultModel: $('#set-model').value,
-        defaultRatio: $('#set-ratio').value,
         accountConcurrency: Number($('#set-concurrency').value),
         maxAttempts: Number($('#set-attempts').value),
         jobTimeoutMs: Number($('#set-timeout').value),

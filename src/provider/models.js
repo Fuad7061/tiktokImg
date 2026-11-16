@@ -1,17 +1,20 @@
 export const MODELS = Object.freeze({
-  gemini: {
-    id: 'gemini',
+  'nano-banana-pro': {
+    id: 'nano-banana-pro',
     name: 'Nano Banana Pro',
-    description: 'Google Gemini image model with strong prompt following and text rendering.',
-    aliases: ['nano-banana-pro', 'nano-banana', 'nano_banana_pro', 'gemini-pro'],
+    description: 'Strong prompt following and text rendering.',
+    // Value TikTok expects in the generation request — do not expose publicly.
+    providerModel: 'gemini',
+    aliases: ['gemini', 'nano-banana', 'nano_banana_pro', 'gemini-pro'],
     maxOutputs: 4,
     source: 'CreativeStudio/ImageGeneration/I2VImageGeneration'
   },
-  'genai_seedream4.5': {
-    id: 'genai_seedream4.5',
+  'seedream4.5': {
+    id: 'seedream4.5',
     name: 'Seedream 4.5',
-    description: 'ByteDance Seedream 4.5 image model with expressive, high-detail results.',
-    aliases: ['seedream-4.5', 'seedream4.5', 'seedream', 'seedream-4'],
+    description: 'Expressive, high-detail results.',
+    providerModel: 'genai_seedream4.5',
+    aliases: ['genai_seedream4.5', 'seedream-4.5', 'seedream', 'seedream-4'],
     maxOutputs: 4,
     source: 'CreativeStudio/ImageGeneration/I2VImageGeneration'
   }
@@ -23,34 +26,16 @@ for (const model of Object.values(MODELS)) {
   for (const alias of model.aliases) index.set(alias.toLowerCase(), model);
 }
 
-export function resolveModel(value, fallback = 'gemini') {
+export function resolveModel(value, fallback = 'nano-banana-pro') {
   const key = String(value || '').trim().toLowerCase();
-  return index.get(key) || MODELS[fallback] || MODELS.gemini;
+  return index.get(key) || MODELS[fallback] || MODELS['nano-banana-pro'];
 }
 
 export function modelOrDefault(value, defaultId) {
-  const model = resolveModel(value || defaultId);
-  return model;
+  return resolveModel(value || defaultId);
 }
 
-export function listModels() {
-  const created = 1735689600;
-  return {
-    object: 'list',
-    data: Object.values(MODELS).map(model => ({
-      id: model.id,
-      object: 'model',
-      created,
-      owned_by: 'image-studio',
-      name: model.name,
-      description: model.description,
-      max_images: model.maxOutputs,
-      aliases: model.aliases
-    }))
-  };
-}
-
-export function modelInfo(model) {
+function publicModel(model) {
   return {
     id: model.id,
     object: 'model',
@@ -58,7 +43,17 @@ export function modelInfo(model) {
     owned_by: 'image-studio',
     name: model.name,
     description: model.description,
-    max_images: model.maxOutputs,
-    aliases: model.aliases
+    max_images: model.maxOutputs
   };
+}
+
+export function listModels() {
+  return {
+    object: 'list',
+    data: Object.values(MODELS).map(publicModel)
+  };
+}
+
+export function modelInfo(model) {
+  return publicModel(model);
 }
