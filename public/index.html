@@ -223,7 +223,7 @@
             <h3>Edit or remix an image</h3>
             <pre id="curl-edits" class="code"></pre>
             <h3>Async job (recommended for automation)</h3>
-            <p class="muted small">Each example generates a fresh <code>ID</code> automatically. Parallel runs never collide; re-use the same <code>$ID</code> to retry the exact same job.</p>
+            <p class="muted small">Plain HTTP — works in terminals, n8n HTTP nodes, and scripts. No shell variables. The server assigns a unique job id automatically; parallel requests never collide.</p>
             <pre id="curl-async" class="code"></pre>
             <pre id="curl-poll" class="code"></pre>
             <div class="divider"></div>
@@ -239,7 +239,7 @@
                   <tr><td><code>response_format</code></td><td>string</td><td><code>url</code></td><td><code>url</code> or <code>b64_json</code>. Aliases: <code>base64</code>, <code>base_64</code>, <code>output_format</code>, <code>output</code>.</td></tr>
                   <tr><td><code>images</code></td><td>string[]</td><td>—</td><td>Up to 4 reference images: HTTPS URL or data URL. Presence switches to image-to-image.</td></tr>
                   <tr><td><code>Prefer: respond-async</code></td><td>header</td><td>—</td><td>Returns <code>202</code> with <code>x-job-id</code> immediately; poll the job endpoint.</td></tr>
-                  <tr><td><code>Idempotency-Key</code></td><td>header</td><td>auto</td><td>Auto-generated unique ID per request (examples use <code>uuidgen</code>). Parallel requests each get their own ID. Retry with the same ID → same job, no double charge.</td></tr>
+                  <tr><td><code>Idempotency-Key</code></td><td>header</td><td>auto</td><td>Optional. Omit it — the server auto-generates a unique key (safe for n8n and parallel runs). Send your own value only when you want retries: same key → same job, no double charge.</td></tr>
                 </tbody>
               </table>
             </div>

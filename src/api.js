@@ -164,7 +164,9 @@ function generationParams(body, { edits = false } = {}) {
 }
 
 async function createAndRun(req, params, { source, apiKeyId, idempotencyKey, background, isOpenAI }) {
-  const existing = findJobByIdempotency(idempotencyKey, apiKeyId);
+  // Client key → retry-safe replay. No key → server issues a fresh UUID (parallel-safe).
+  const key = idempotencyKey || crypto.randomUUID();
+  const existing = findJobByIdempotency(key, apiKeyId);
   if (existing) {
     if (background) return { job: existing, replay: true };
     if (existing.status === 'queued' || existing.status === 'running') return { job: await waitForJob(existing.id), replay: true };
@@ -179,7 +181,7 @@ async function createAndRun(req, params, { source, apiKeyId, idempotencyKey, bac
     count: params.count,
     references: params.references,
     request: { prompt: params.prompt, model: params.model.id, count: params.count, references: params.references },
-    idempotencyKey
+    idempotencyKey: key
   });
   if (background || params.background) {
     setImmediate(() => executeJob(job.id).catch(() => {}));
@@ -542,9 +544,10 @@ export async function handleApi(req, res, url) {
       const model = resolveModel(payload.model || currentSettings().defaultModel);
       const prompt = String(payload.prompt || '').trim();
       if (!prompt) return fail(res, 422, 'A prompt is required.', 'invalid_prompt');
-      const idempotencyKey = String(payload.idempotencyKey || payload.idempotency_key || req.headers['idempotency-key'] || '').slice(0, 200) || null;
-      if (idempotencyKey) {
-        const existing = findJobByIdempotency(idempotencyKey, null);
+      const clientKey = String(payload.idempotencyKey || payload.idempotency_key || req.headers['idempotency-key'] || '').slice(0, 200) || null;
+      const idempotencyKey = clientKey || crypto.randomUUID();
+      if (clientKey) {
+        const existing = findJobByIdempotency(clientKey, null);
         if (existing) return send(res, 200, { ok: true, job: existing, replay: true });
       }
       const kind = references.length ? 'i2i' : 't2i';

@@ -135,24 +135,20 @@ Up to 4 references, 20 MB each, 25 MB per remote download. Image-to-image output
 
 ### Asynchronous jobs
 
-Add `Prefer: respond-async` to receive `202` with a job id, then poll. The examples auto-generate a unique `Idempotency-Key` so parallel runs never collide; re-use the same `$ID` to retry the same job:
+Add `Prefer: respond-async` to receive `202` with a job id, then poll. No shell helpers or `Idempotency-Key` required — the server auto-assigns a unique key so parallel requests never collide (works in n8n HTTP nodes, scripts, and terminals):
 
 ```bash
-ID="$(uuidgen 2>/dev/null || openssl rand -hex 16)"
 curl -s https://images.example.com/v1/images/generations \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY" \
   -H "Content-Type: application/json" \
   -H "Prefer: respond-async" \
-  -H "Idempotency-Key: $ID" \
   -d '{"model":"nano-banana-pro","prompt":"A lighthouse at dusk"}'
 
 curl -s https://images.example.com/api/jobs/JOB_ID \
   -H "Authorization: Bearer $IMAGE_STUDIO_KEY"
 ```
 
-- **Parallel:** each shell run (or each background `&` job) creates a fresh `$ID` — requests never share a key.
-- **Retry:** run again with the **same** `$ID` → you get the existing job back, not a new one (no double charge).
-- You can also put `idempotencyKey` in the JSON body instead of the header.
+Optional retry protection: send your own `Idempotency-Key` header (or `idempotencyKey` in the JSON body). Retry with the **same** value → existing job, no double charge. Omit it for normal parallel use.
 
 ### Responses
 

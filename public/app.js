@@ -1014,39 +1014,31 @@ async function loadKeys() {
 
   $('#api-base').textContent = location.origin;
   $('#doc-default-model').textContent = state.settings.defaultModel || 'nano-banana-pro';
-  // Unique key per shell run — reuse $ID to retry the same job; each parallel line gets its own ID.
-  const idem = `$(uuidgen 2>/dev/null || openssl rand -hex 16)`;
-  $('#curl-generations').textContent = `ID="${idem}"
-curl -s ${location.origin}/v1/images/generations \\
+  // Plain copy-paste — works in terminals and n8n HTTP nodes (no shell vars).
+  // The server auto-assigns a unique Idempotency-Key when you omit the header.
+  $('#curl-generations').textContent = `curl -s ${location.origin}/v1/images/generations \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: $ID" \\
   -d '{
     "model": "nano-banana-pro",
     "prompt": "A minimal product shot of a ceramic mug",
     "n": 1
-  }'
-# Retry the same request later with the same "$ID" → same job, no double charge.`;
-  $('#curl-edits').textContent = `ID="${idem}"
-curl -s ${location.origin}/v1/images/edits \\
+  }'`;
+  $('#curl-edits').textContent = `curl -s ${location.origin}/v1/images/edits \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: $ID" \\
   -d '{
     "model": "seedream4.5",
     "prompt": "Turn this into a watercolor painting",
     "images": ["data:image/png;base64,..."]
   }'`;
-  $('#curl-async').textContent = `ID="${idem}"
-curl -s ${location.origin}/v1/images/generations \\
+  $('#curl-async').textContent = `curl -s ${location.origin}/v1/images/generations \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
   -H "Prefer: respond-async" \\
-  -H "Idempotency-Key: $ID" \\
   -d '{"model":"nano-banana-pro","prompt":"A serene mountain lake at sunrise"}'
-# Response: 202 + x-job-id. Poll with that job id.
-# Parallel-safe: each shell run generates a fresh $ID, so requests never collide.
-# Retry-safe: re-run with the same $ID → the existing job, not a new one.`;
+# 202 + x-job-id immediately. Poll that job id below.
+# Optional retry: add -H "Idempotency-Key: my-unique-string" — same key → same job.`;
   $('#curl-poll').textContent = `curl -s ${location.origin}/api/jobs/JOB_ID \\
   -H "Authorization: Bearer sk-..."`;
 }
