@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Image Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234f46e5'/%3E%3Cpath d='M18 44l10-24 8 16 4-8 6 16H18z' fill='%23fff'/%3E%3Ccircle cx='44' cy='20' r='4' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="boot" class="boot">Loading…</div>
+
+  <section id="login-view" class="login hidden">
+    <form id="login-form" class="login-card">
+      <div class="brand-mark" aria-hidden="true">IS</div>
+      <h1>Image Studio</h1>
+      <p class="muted">Sign in to manage accounts, jobs, and API keys.</p>
+      <label class="field">
+        <span>Admin password</span>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="login-error" class="form-error" role="alert"></p>
+      <button class="btn primary wide" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <div id="app-view" class="shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark small" aria-hidden="true">IS</div>
+        <div>
+          <strong>Image Studio</strong>
+          <span class="muted small">TikTok image API</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview">
+          <span class="nav-icon" aria-hidden="true">◧</span> Overview
+        </button>
+        <button class="nav-item" data-view="accounts">
+          <span class="nav-icon" aria-hidden="true">◍</span> Accounts
+        </button>
+        <button class="nav-item" data-view="playground">
+          <span class="nav-icon" aria-hidden="true">✦</span> Playground
+        </button>
+        <button class="nav-item" data-view="jobs">
+          <span class="nav-icon" aria-hidden="true">▤</span> Jobs
+        </button>
+        <button class="nav-item" data-view="keys">
+          <span class="nav-icon" aria-hidden="true">⌘</span> API keys
+        </button>
+        <button class="nav-item" data-view="settings">
+          <span class="nav-icon" aria-hidden="true">⚙</span> Settings
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="health-dot" class="dot" aria-hidden="true"></span>
+        <span id="health-label" class="small muted">Checking…</span>
+        <button id="logout-button" class="link-button hidden" type="button">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">Overview</h1>
+          <p id="page-subtitle" class="muted small">Account pool and generation activity</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="version-badge" class="badge neutral">v1.0.0</span>
+          <button id="refresh-button" class="btn subtle" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <section class="view" data-view="overview">
+        <div id="stat-cards" class="stat-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <div class="card-head">
+              <h2>Recent jobs</h2>
+              <button class="link-button" type="button" data-goto="jobs">View all</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr><th>Created</th><th>Model</th><th>Ratio</th><th>Status</th><th>Images</th></tr>
+                </thead>
+                <tbody id="recent-jobs"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-head"><h2>Pool status</h2></div>
+            <div id="pool-status" class="pool-list"></div>
+            <div class="divider"></div>
+            <div class="card-head"><h2>API quick start</h2></div>
+            <p class="muted small">Send a bearer key from the API keys page.</p>
+            <pre id="overview-curl" class="code"></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="view hidden" data-view="accounts">
+        <div class="two-col wide-left">
+          <article class="card">
+            <div class="card-head">
+              <h2>Cookie profiles</h2>
+              <button id="sync-all-button" class="btn subtle" type="button">Sync all</button>
+            </div>
+            <div id="pool-summary" class="pool-summary"></div>
+            <div id="profiles" class="stack"></div>
+          </article>
+          <article class="card">
+            <div class="card-head"><h2>Import cookies</h2></div>
+            <form id="import-form" class="stack">
+              <label class="field">
+                <span>Profile name</span>
+                <input id="import-name" type="text" placeholder="Main workspace" maxlength="100" />
+              </label>
+              <label class="field">
+                <span>Cookie file</span>
+                <input id="import-file" type="file" accept=".txt,.json,text/plain,application/json" />
+                <small class="muted">JSON export, Netscape file, or a raw Cookie header.</small>
+              </label>
+              <label class="field">
+                <span>Or paste cookie text</span>
+                <textarea id="import-content" rows="10" placeholder="Paste the contents of tiktok_cookies.txt" spellcheck="false"></textarea>
+              </label>
+              <button class="btn primary" type="submit">Import and validate</button>
+              <p class="muted small">Cookies are encrypted at rest and only used to call the image endpoints. Sessions cannot be renewed without a browser login, but the server absorbs any cookies TikTok refreshes automatically. When a session expires, use <strong>Edit cookies</strong> on the profile card to paste a fresh export.</p>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section class="view hidden" data-view="playground">
+        <div class="two-col wide-left">
+          <article class="card">
+            <div class="card-head">
+              <h2>Generate</h2>
+              <span id="playground-state" class="badge neutral">Idle</span>
+            </div>
+            <form id="playground-form" class="stack">
+              <label class="field">
+                <span>Prompt</span>
+                <textarea id="pg-prompt" rows="6" placeholder="Describe the image you want to create" required></textarea>
+              </label>
+              <div class="row">
+                <label class="field grow">
+                  <span>Model</span>
+                  <select id="pg-model"></select>
+                </label>
+                <label class="field">
+                  <span>Aspect ratio</span>
+                  <select id="pg-ratio"></select>
+                </label>
+                <label class="field narrow">
+                  <span>Images</span>
+                  <select id="pg-count"></select>
+                </label>
+              </div>
+              <label class="field">
+                <span>Reference images (optional, up to 4)</span>
+                <input id="pg-refs" type="file" accept="image/*" multiple />
+                <small class="muted">When references are present the request runs as image-to-image and the output follows the reference aspect ratio.</small>
+              </label>
+              <div id="pg-ref-preview" class="thumb-row"></div>
+              <button class="btn primary" type="submit">Generate</button>
+            </form>
+          </article>
+          <article class="card">
+            <div class="card-head"><h2>Output</h2><span id="pg-timer" class="muted small"></span></div>
+            <div id="pg-output" class="output-panel">
+              <p class="muted">Generated images appear here.</p>
+            </div>
+            <div class="divider"></div>
+            <div class="card-head"><h2>Latest playground jobs</h2></div>
+            <div id="pg-history" class="stack compact"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view hidden" data-view="jobs">
+        <article class="card">
+          <div class="card-head">
+            <h2>Job history</h2>
+            <div class="row tight">
+              <select id="job-status-filter">
+                <option value="">All statuses</option>
+                <option value="succeeded">Succeeded</option>
+                <option value="failed">Failed</option>
+                <option value="running">Running</option>
+                <option value="queued">Queued</option>
+              </select>
+              <button id="jobs-refresh" class="btn subtle" type="button">Refresh</button>
+              <button id="jobs-clear" class="btn danger" type="button">Clear history</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="table rooms">
+              <thead>
+                <tr><th>Created</th><th>Source</th><th>Model</th><th>Prompt</th><th>Status</th><th>Account</th><th>Duration</th><th></th></tr>
+              </thead>
+              <tbody id="jobs-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="view hidden" data-view="keys">
+        <div class="two-col">
+          <article class="card">
+            <div class="card-head"><h2>API keys</h2></div>
+            <form id="key-form" class="row tight">
+              <input id="key-name" class="grow" type="text" placeholder="Key name" maxlength="100" />
+              <button class="btn primary" type="submit">Create key</button>
+            </form>
+            <div id="key-created" class="callout hidden"></div>
+            <div id="key-list" class="stack compact"></div>
+          </article>
+          <article class="card docs">
+            <div class="card-head"><h2>API reference</h2><span class="badge info">OpenAI compatible</span></div>
+            <p class="muted small">Base URL: <code id="api-base"></code>. Authenticate every request with <code>Authorization: Bearer sk-...</code>. All examples below are ready to run.</p>
+            <h3>Generate an image</h3>
+            <pre id="curl-generations" class="code"></pre>
+            <h3>Edit or remix an image</h3>
+            <pre id="curl-edits" class="code"></pre>
+            <h3>Async job (recommended for automation)</h3>
+            <pre id="curl-async" class="code"></pre>
+            <pre id="curl-poll" class="code"></pre>
+            <div class="divider"></div>
+            <h3>Parameters</h3>
+            <div class="table-wrap">
+              <table class="table docs-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
+                <tbody>
+                  <tr><td><code>model</code></td><td>string</td><td id="doc-default-model">nano-banana-pro</td><td><code>nano-banana-pro</code> / <code>gemini</code>, or <code>genai_seedream4.5</code>.</td></tr>
+                  <tr><td><code>prompt</code></td><td>string</td><td>required</td><td>The image description.</td></tr>
+                  <tr><td><code>ratio</code></td><td>string</td><td>1:1</td><td><code>1:1</code>, <code>9:16</code>, <code>16:9</code>, <code>4:3</code>, <code>3:4</code>, <code>3:2</code>, <code>2:3</code>, <code>21:9</code>, <code>5:4</code>, <code>4:5</code>, or <code>WxH</code>.</td></tr>
+                  <tr><td><code>size</code></td><td>string</td><td>—</td><td>Alias for a custom size such as <code>1024x1024</code>.</td></tr>
+                  <tr><td><code>n</code></td><td>number</td><td>1</td><td>1–4 images per request.</td></tr>
+                  <tr><td><code>response_format</code></td><td>string</td><td><code>url</code></td><td><code>url</code> or <code>b64_json</code>. Aliases: <code>base64</code>, <code>base_64</code>, <code>output_format</code>, <code>output</code>.</td></tr>
+                  <tr><td><code>images</code></td><td>string[]</td><td>—</td><td>Up to 4 reference images: HTTPS URL or data URL. Presence switches to image-to-image.</td></tr>
+                  <tr><td><code>Prefer: respond-async</code></td><td>header</td><td>—</td><td>Returns <code>202</code> with <code>x-job-id</code> immediately; poll the job endpoint.</td></tr>
+                  <tr><td><code>Idempotency-Key</code></td><td>header</td><td>—</td><td>Replays the same job instead of billing again.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="divider"></div>
+            <h3>Endpoints</h3>
+            <ul class="plain-list small">
+              <li><code>GET /v1/models</code> — list available models.</li>
+              <li><code>POST /v1/images/generations</code> — text-to-image.</li>
+              <li><code>POST /v1/images/edits</code> — image-to-image (JSON references or multipart).</li>
+              <li><code>GET /api/jobs/:id</code> — job status with freshly signed media URLs.</li>
+            </ul>
+            <p class="muted small">Returned <code>url</code> values point to this server, which proxies the provider CDN. They do not expose your cookies and stay valid for seven days, even when the upstream signed URL expires.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="view hidden" data-view="settings">
+        <div class="two-col">
+          <article class="card">
+            <div class="card-head"><h2>Defaults</h2></div>
+            <form id="settings-form" class="stack">
+              <div class="row">
+                <label class="field grow">
+                  <span>Default model</span>
+                  <select id="set-model"></select>
+                </label>
+                <label class="field grow">
+                  <span>Default ratio</span>
+                  <select id="set-ratio"></select>
+                </label>
+              </div>
+              <div class="row">
+                <label class="field grow">
+                  <span>Concurrent jobs per account</span>
+                  <input id="set-concurrency" type="number" min="1" max="5" step="1" />
+                </label>
+                <label class="field grow">
+                  <span>Attempts per job</span>
+                  <input id="set-attempts" type="number" min="1" max="5" step="1" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="field grow">
+                  <span>Job timeout (ms)</span>
+                  <input id="set-timeout" type="number" min="30000" max="900000" step="1000" />
+                </label>
+                <label class="field grow">
+                  <span>Retention (days)</span>
+                  <input id="set-retention" type="number" min="1" max="365" step="1" />
+                </label>
+              </div>
+              <div class="row">
+                <label class="field grow">
+                  <span>API rate limit (requests per minute per key)</span>
+                  <input id="set-rpm" type="number" min="1" max="10000" step="1" />
+                </label>
+                <label class="field grow">
+                  <span>Auto-sync interval (minutes, 0 = off)</span>
+                  <input id="set-autosync" type="number" min="0" max="1440" step="1" />
+                </label>
+              </div>
+              <div class="row tight">
+                <button class="btn primary" type="submit">Save settings</button>
+                <button id="automation-sync" class="btn subtle" type="button">Sync accounts &amp; credits now</button>
+              </div>
+              <p class="muted small" id="automation-state">Automatic sync keeps account lists, credits and expiry dates current.</p>
+            </form>
+          </article>
+          <article class="card">
+            <div class="card-head"><h2>Runtime</h2></div>
+            <dl class="kv" id="runtime-info"></dl>
+            <p class="muted small">Images are never written to disk. Only job metadata and remote URLs are stored; retention cleanup runs every six hours.</p>
+            <div class="divider"></div>
+            <h3>Admin password</h3>
+            <form id="password-form" class="stack">
+              <label class="field">
+                <span>Current password</span>
+                <input id="pw-current" type="password" autocomplete="current-password" />
+              </label>
+              <div class="row">
+                <label class="field grow">
+                  <span>New password</span>
+                  <input id="pw-new" type="password" minlength="8" autocomplete="new-password" required />
+                </label>
+                <label class="field grow">
+                  <span>Confirm new password</span>
+                  <input id="pw-confirm" type="password" minlength="8" autocomplete="new-password" required />
+                </label>
+              </div>
+              <button class="btn primary" type="submit">Update password</button>
+              <p class="muted small">Stored as a salted scrypt hash in the database. The <code>ADMIN_PASSWORD</code> environment value remains a recovery password.</p>
+            </form>
+            <div class="divider"></div>
+            <h3>Data persistence</h3>
+            <p class="muted small">Accounts, API keys, settings and job history live in <code>DATA_DIR</code> (Docker: <code>/app/data</code>). Mount a persistent volume at that path in Coolify so redeploys keep your data.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="card-head">
+        <h2 id="modal-title">Job details</h2>
+        <button id="modal-close" class="btn subtle" type="button">Close</button>
+      </div>
+      <div id="modal-body" class="stack"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

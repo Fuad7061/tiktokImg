@@ -1,0 +1,14 @@
+{
+  "name": "image-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lightweight image generation API with an OpenAI-compatible endpoint, account pool and web dashboard.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  }
+}

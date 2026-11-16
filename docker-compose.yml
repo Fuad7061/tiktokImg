@@ -1,0 +1,22 @@
+services:
+  image-studio:
+    build: .
+    image: image-studio:latest
+    container_name: image-studio
+    restart: unless-stopped
+    ports:
+      - "4175:4175"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      HOST: 0.0.0.0
+      PORT: "4175"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4175/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
